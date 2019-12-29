@@ -23,7 +23,10 @@ public class SignupController {
     private EntityManager entityManager;
 
     @RequestMapping("*")
-    public String defaultMapping() {
+    public String defaultMapping(Authentication authentication) {
+        if (authentication.getName() != null && authentication.getName().equals("admin")) {
+            return "redirect:/admin";
+        }
         return "redirect:/signup";
     }
 
@@ -46,11 +49,16 @@ public class SignupController {
         return "signups";
     }
     
+    @RequestMapping(value = "/admin", method = RequestMethod.GET)
+    public String loadAdminPage() {
+        return "admin";
+    }
+    
     @RequestMapping(value = "/admin/signups", method = RequestMethod.GET)
     public String loadSignups(Model model) {
         List<Signup> signups = signupRepository.findAll();
         model.addAttribute("signups", signups);
-        return "signups";
+        return "signups_admin";
     }
 
     @RequestMapping(value = "/signup", method = RequestMethod.POST)

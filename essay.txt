@@ -9,7 +9,7 @@ Login is at localhost:8080/login. For the rest of the urls the "localhost:8080" 
 
 
 
-FLAW 1 - SQL Injection:
+FLAW 1 - SQL Injection - A1
 
 Description:
 After a user has signed up a link is provided for checking their signups at /signups.
@@ -22,7 +22,7 @@ SELECT s.id, s.name, s.address FROM Signup s WHERE s.name='$URLPARAMGOESHERE'
 which does not do any validation. When user goes to url /signups?name=ted' OR ''='
 this query will be executed:
 SELECT s.id, s.name, s.address FROM Signup s WHERE s.name='ted' OR ''=''
-and all rows from Signup will be returned.
+and all rows from table Signup will be returned.
 
 How to fix:
 Instead of using native SQL queries, @Query annotations or JpaRepositories should be used. 
@@ -32,72 +32,67 @@ This does not restrict the user from finding signups by other names but the inje
 
 
 
-FLAW 2: Cross Site Scripting (XSS)
+FLAW 2: Broken Authentication - A2
+
+Description: 
+The application allows weak passwords and ships with default admin credentials (username: admin, password: admin) and it is possible to brute force the login endpoint which makes it possible to crack passwords relatively easily and get access to the system. 
+All passwords are saved as plain text without any hashing, see FLAW 3.
+
+How to fix:
+Brute forcing could be managed by adding a listener for failed login attempts which would disable logins for user for a while if login has failed for example 5 times in a row.
+The admin password should be changed to a significantly more complex and secure one. At least the admin account should be protected against brute forcing.
+
+The app does not have an account creation page but if it had, checks against using the worst and most common passwords could be implemented.
+
+Implementing multi-factor authentication is a really secure option but it might be impractical considering how small this application is.
+
+
+
+FLAW 3: Sensitive Data Exposure - A3
 
 Description:
-When a user (name: ted, password: ted) is signed in the broser redirects to a signup form for an event. The form asks for a name and an address and the inputs have no restrictions.
+This application stores addresses which for some people can be quite sensitive data. The page /admin/signups lists all signups in the database and it (and the signup data) should not be accessible by anyone else but admins. The passwords and addresses are saved as plain text without any hashing which makes all user credentials and addresses vulnerable if the database gets stolen.
+The signup data is sent in plain text and the site uses basic insecure HTTP so it is possible to intercept the responses for the page /admin/signups and reveal all signup data.
+
+The admin credentials are really basic (admin, admin) and because of brute forcing of the login page is not checked against, it is possible for someone to get access to the admin credentials. 
+
+
+How to fix:
+Passwords should be hashed by changing SecurityConfiguration.java method configureGlobal code to
+auth.userDetailsService(userDetailsService).passwordEncoder(new BCryptPasswordEncoder());
+After this passwords will be hashed with bcrypt and then stored, making it almost impossible to use the hashed passwords in the database.
+
+Addresses could also be crypted in database or at least when they are sent to the admin page a secure protocol such as HTTPS should be used.
+
+
+
+FLAW 4: Broken Access Control - A5
+
+Description:
+This app uses access controls and the /admin pages should only be accessible by admins. In the security configuration only the /admin page is set for users with authority ADMIN.
+If you log in as ted (not an admin), /admin page will not open but /admin/signups will. Because of the broken access control currently all authenticated users can access the admin signup page which contains all addresses.
+
+
+How to fix:
+In SecurityConfiguration.java the admin matcher should be changed to
+.antMatchers("/admin/**").hasAuthority("ADMIN")
+This will correctly check for all addresses starting with /admin that user has ADMIN authority.
+
+
+
+FLAW 5: Cross Site Scripting (XSS) - A7
+
+Description:
+When a user (username: ted, password: ted) is signed in, the broser redirects to a signup form for an event. The form asks for a name and an address and the inputs have no restrictions.
 It is possible to enter data which contains html elements such as script tags with javascript code and everything will be saved to the database. 
 On page /admin/signups you can see all signups which have been submitted. If someone has set their name or address to for example:
 
 <script>alert('you have been hacked')</script>
 
-and the admin/signups page is opened, the code block will run on the browser showing an alert box. This happens because the browser interprets the data as html element instead of just text.
-This bug allows people to run arbitrary javascript on someone elses browser and 
+and and an admin opens the page, the code block will run on the browser showing an alert box. This happens because the browser interprets the data as an html script element instead of just text.
+This bug allows people to run arbitrary javascript on the admins browser which could be very dangerous.
+
 
 How to fix:
 The Thymeleaf template signups.html uses unescaped text for showing the data stored in database. If all "th:utext" mentions are changed to "th:text" the problem no longer exists.
 The default text style "th:text" escapes the string correctly so that the browser interprets everything as plain text and this approach should be used for displaying data that could be user input to avoid cross site scripting.
-
-
-
-FLAW 3: Broken Authentication
-
-Description: 
-The system allows weak passwords and uses default admin credentials (user: admin, password: admin) and it is possible to brute force the login endpoint which makes it possible to crack passwords relatively easily and get access to the system. 
-All passwords are saved as plain text without any hashing which means that all credentials are compromised if the database gets broken into.
-
-How to fix:
-Brute forcing could be managed by adding a listener for failed login attempts which disables logins for user for a while if login has failed for example 5 times in a row.
-
-Passwords should be hashed by changing SecurityConfiguration.java method configureGlobal code to
-auth.userDetailsService(userDetailsService).passwordEncoder(new BCryptPasswordEncoder());
-
-After this passwords will be hashed with bcrypt and then stored making it impossible to use the passwords in the database without first having to decode the crypted passwords.
-
-
-
-FLAW 4: Sensitive Data Exposure
-
-Description:
-This application stores addresses which for some people can be quite sensitive data. The page /admin/signups lists all signups in the database and it should not be accessible by anyone else but admins. The passwords and addresses are saved as plain text without any hashing which makes all user credentials and addresses vulnerable if the database gets stolen.
-The signup data is sent in plain text and the site uses basic insecure HTTP so it is possible to intercept the responses for the page /admin/signups and reveal all signup data.
-
-The admin credentials are really basic (admin, admin) and because of brute forcing of the login page is allowed it is possible for someone to get access to the admin site. 
-
-
-How to fix:
-Passwords should be hashed by changing SecurityConfiguration.java method configureGlobal code to
-auth.userDetailsService(userDetailsService).passwordEncoder(new BCryptPasswordEncoder());
-
-Addresses should also be hashed in database or at least when they are sent to the admin page a secure protocol such as HTTPS should be used.
-
-The app does not have an account creation page but if it had, checks against using the worst and most common passwords could be implemented.
-
-The admin password should be changed to a significantly more complex and secure one.
-
-
-
-FLAW 5: Broken Access Control
-Description:
-This app uses access controls and the /admin pages should only be accessible by admins. In the security configuration /admin pages are correctly set only for users with authority ADMIN but in CustomUserDetailsService this authority is accidentally given to every authenticated user including ted. Because of the broken access control currently all authenticated users can access the admin pages including the listing of signups which contains addresses.
-
-
-How to fix:
-In CustomUserDetailsService.java method loadUserByUsername the admin authority should only be given if the username is admin. 
-This can be fixed by removing the "|| true" part from the last if block in the function.
-
-
-Hours used for this project:
-15.12. 2h
-27.12. 4h
-29.12. 5h

@@ -36,7 +36,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         
         System.out.println("Loading user " + username);
         
-        if (account.getUsername().equals("admin") || true) {
+        if (account.getUsername().equals("admin")) {
             return new org.springframework.security.core.userdetails.User(
                 account.getUsername(),
                 account.getPassword(),
